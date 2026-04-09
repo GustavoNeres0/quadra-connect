@@ -14,6 +14,7 @@ import Reservations from "./pages/Reservations";
 import Dashboard from "./pages/Dashboard";
 import BookingPage from "./pages/BookingPage";
 import ChatPage from "./pages/ChatPage";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/chat" element={<ChatPage />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
