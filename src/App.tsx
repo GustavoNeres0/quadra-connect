@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Onboarding from "./pages/Onboarding";
 import Login from "./pages/Login";
@@ -11,7 +11,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import Search from "./pages/Search";
 import Reservations from "./pages/Reservations";
-import Dashboard from "./pages/Dashboard";
+import Home from "./pages/home";
 import BookingPage from "./pages/BookingPage";
 import ChatPage from "./pages/ChatPage";
 import Profile from "./pages/Profile";
@@ -33,7 +33,8 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/search" element={<Search />} />
           <Route path="/reservations" element={<Reservations />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/dashboard" element={<Navigate to="/home" replace />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/profile" element={<Profile />} />

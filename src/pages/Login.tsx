@@ -17,7 +17,7 @@ const Login = () => {
       return;
     }
     toast({ title: "Login realizado!", description: "Redirecionando..." });
-    navigate("/dashboard");
+    navigate("/home");
   };
 
   const handleGoogleLogin = () => {
