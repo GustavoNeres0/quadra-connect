@@ -1,0 +1,25 @@
+import { supabase } from '@/integrations/supabase/client';
+
+// Tipagem do mock
+const mockSignIn = supabase.auth.signInWithPassword as jest.Mock;
+
+it('chama supabase com email e senha corretos', async () => {
+  // Define o retorno simulado
+  mockSignIn.mockResolvedValueOnce({
+    data: { user: { id: '123' }, session: {} },
+    error: null,
+  });
+
+  renderLogin();
+
+  await userEvent.type(screen.getByPlaceholderText(/email/i), 'user@test.com');
+  await userEvent.type(screen.getByPlaceholderText(/senha/i), 'senha123');
+  await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
+
+  await waitFor(() => {
+    expect(mockSignIn).toHaveBeenCalledWith({
+      email: 'user@test.com',
+      password: 'senha123',
+    });
+  });
+});
