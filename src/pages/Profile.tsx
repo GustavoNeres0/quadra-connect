@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  User, Mail, Phone, MapPin, CreditCard, Bell, Shield, ChevronRight,
-  LogOut, Camera, Edit2, Star, Calendar, Clock
+  User, Mail, Phone, CreditCard, Bell, Shield, ChevronRight,
+  LogOut, Camera, Star, Calendar, Clock, Loader2, Edit2
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,37 +10,44 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { BottomNav } from "@/components/BottomNav";
 import { useToast } from "@/hooks/use-toast";
+import { authApi, profileApi, ApiError, type AuthUser, type CustomerProfile } from "@/lib/api";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState(true);
-  const [editOpen, setEditOpen] = useState(false);
-  const [profile, setProfile] = useState({
-    name: "João Silva",
-    email: "joao.silva@email.com",
-    phone: "(62) 99999-1234",
-    cpf: "123.456.789-00",
-    city: "Anápolis",
-    state: "Goiás",
-    address: "Rua das Flores, 123",
-  });
-  const [editData, setEditData] = useState(profile);
 
-  const handleSave = () => {
-    setProfile(editData);
-    setEditOpen(false);
-    toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas." });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [customer, setCustomer] = useState<CustomerProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const [userData, customerData] = await Promise.all([
+          authApi.me(),
+          profileApi.customer(),
+        ]);
+        setUser(userData);
+        setCustomer(customerData);
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Erro ao carregar perfil";
+        toast({ variant: "destructive", title: "Erro", description: message });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProfile();
+  }, []);
+
+  const handleEditClick = () => {
+    toast({ title: "Em breve", description: "A edição de perfil ainda não está disponível na API." });
   };
 
   const handleLogout = () => {
+    authApi.logout();
     toast({ title: "Logout realizado!", description: "Até logo!" });
     navigate("/login");
   };
@@ -56,6 +63,18 @@ const Profile = () => {
     { icon: Bell, label: "Notificações", desc: "Alertas de reservas e promoções", toggle: true },
     { icon: Shield, label: "Privacidade e Segurança", desc: "Senha e dados pessoais" },
   ];
+
+  const memberSince = customer?.createdAt
+    ? new Date(customer.createdAt).getFullYear()
+    : null;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -78,7 +97,9 @@ const Profile = () => {
             <div className="relative">
               <Avatar className="w-20 h-20 border-3 border-white/50">
                 <AvatarFallback className="bg-white/20 text-white text-2xl font-bold">
-                  {profile.name.split(" ").map(n => n[0]).join("")}
+                  {customer?.name
+                    ? customer.name.split(" ").map((n) => n[0]).join("").slice(0, 2)
+                    : "U"}
                 </AvatarFallback>
               </Avatar>
               <button className="absolute -bottom-1 -right-1 w-8 h-8 bg-accent rounded-full flex items-center justify-center border-2 border-white shadow-md">
@@ -86,11 +107,13 @@ const Profile = () => {
               </button>
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-bold">{profile.name}</h2>
-              <p className="text-white/70 text-sm">{profile.email}</p>
-              <Badge className="mt-2 bg-white/20 text-white border-0 text-xs">
-                Membro desde 2024
-              </Badge>
+              <h2 className="text-xl font-bold">{customer?.name ?? "Usuário"}</h2>
+              <p className="text-white/70 text-sm">{user?.email}</p>
+              {memberSince && (
+                <Badge className="mt-2 bg-white/20 text-white border-0 text-xs">
+                  Membro desde {memberSince}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -98,6 +121,7 @@ const Profile = () => {
 
       <div className="container mx-auto max-w-2xl px-4 -mt-14 space-y-5">
         {/* Stats */}
+        {/* TODO: substituir por dados reais de reservationsApi.listMine() */}
         <Card className="shadow-lg border-0">
           <CardContent className="p-4">
             <div className="grid grid-cols-3 divide-x divide-border">
@@ -120,52 +144,17 @@ const Profile = () => {
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-foreground">Informações Pessoais</h3>
-              <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="text-accent gap-1" onClick={() => setEditData(profile)}>
-                    <Edit2 className="w-4 h-4" /> Editar
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Editar Perfil</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 pt-2">
-                    <div className="space-y-2">
-                      <Label>Nome Completo</Label>
-                      <Input value={editData.name} onChange={(e) => setEditData({...editData, name: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Telefone</Label>
-                      <Input value={editData.phone} onChange={(e) => setEditData({...editData, phone: e.target.value})} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label>Cidade</Label>
-                        <Input value={editData.city} onChange={(e) => setEditData({...editData, city: e.target.value})} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Estado</Label>
-                        <Input value={editData.state} onChange={(e) => setEditData({...editData, state: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Endereço</Label>
-                      <Input value={editData.address} onChange={(e) => setEditData({...editData, address: e.target.value})} />
-                    </div>
-                    <Button className="w-full" onClick={handleSave}>Salvar Alterações</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button variant="ghost" size="sm" className="text-accent gap-1" onClick={handleEditClick}>
+                <Edit2 className="w-4 h-4" /> Editar
+              </Button>
             </div>
 
             <div className="space-y-4">
               {[
-                { icon: User, label: "Nome", value: profile.name },
-                { icon: Mail, label: "Email", value: profile.email },
-                { icon: Phone, label: "Telefone", value: profile.phone },
-                { icon: CreditCard, label: "CPF", value: profile.cpf },
-                { icon: MapPin, label: "Localização", value: `${profile.city}, ${profile.state}` },
+                { icon: User, label: "Nome", value: customer?.name ?? "-" },
+                { icon: Mail, label: "Email", value: user?.email ?? "-" },
+                { icon: Phone, label: "Telefone", value: customer?.phone ?? "-" },
+                { icon: CreditCard, label: "CPF", value: customer?.cpf ?? "-" },
               ].map((item, i) => {
                 const Icon = item.icon;
                 return (
