@@ -1,47 +1,46 @@
-import { useState, useMemo } from "react";
-import { Calendar, Users, MapPin, Clock, CheckCircle2, AlertCircle, CircleDollarSign, ArrowRight, Search } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Calendar, Users, MapPin, Clock, CheckCircle2, AlertCircle, XCircle, Search, Loader2 } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import {
+  reservationsApi, unitsApi, categoriesApi, ApiError,
+  ReservationStatus, type Reservation, type Unit, type Category,
+} from "@/lib/api";
 
-interface Reservation {
-  id: string;
-  reservation_date: string;
-  start_time: string;
-  duration: number;
-  num_players: number;
-  total_price: number;
-  amount_paid: number;
-  payment_status: "paid" | "partial" | "pending";
-  court_name: string;
-  sport_type: string;
-  location: string;
-}
-
-const mockReservations: Reservation[] = [
-  { id: "1", reservation_date: "2026-05-20", start_time: "19:00", duration: 1, num_players: 10, total_price: 120, amount_paid: 120, payment_status: "paid", court_name: "Arena Sport Center", sport_type: "Futebol", location: "Rua das Flores, 123" },
-  { id: "2", reservation_date: "2026-05-25", start_time: "20:00", duration: 2, num_players: 4, total_price: 160, amount_paid: 80, payment_status: "partial", court_name: "Quadra Central Tênis", sport_type: "Tênis", location: "Av. Brasil, 456" },
-  { id: "3", reservation_date: "2026-06-02", start_time: "18:30", duration: 1, num_players: 6, total_price: 60, amount_paid: 0, payment_status: "pending", court_name: "Vôlei Praia Club", sport_type: "Vôlei de Praia", location: "Rua do Esporte, 789" },
-  { id: "4", reservation_date: "2026-04-15", start_time: "17:00", duration: 1, num_players: 8, total_price: 90, amount_paid: 90, payment_status: "paid", court_name: "Basquete Arena", sport_type: "Basquete", location: "Rua Central, 321" },
-];
-
-const statusConfig = {
-  paid: { label: "Pago", icon: CheckCircle2, className: "bg-success/10 text-success border-success/20" },
-  partial: { label: "Parcial", icon: CircleDollarSign, className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" },
-  pending: { label: "Pendente", icon: AlertCircle, className: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
+const statusConfig: Record<ReservationStatus, { label: string; icon: typeof CheckCircle2; className: string }> = {
+  [ReservationStatus.PENDING]: { label: "Pendente", icon: AlertCircle, className: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
+  [ReservationStatus.CONFIRMED]: { label: "Confirmada", icon: CheckCircle2, className: "bg-success/10 text-success border-success/20" },
+  [ReservationStatus.REJECTED]: { label: "Rejeitada", icon: XCircle, className: "bg-destructive/10 text-destructive border-destructive/20" },
+  [ReservationStatus.CANCELLED]: { label: "Cancelada", icon: XCircle, className: "bg-muted text-muted-foreground border-border" },
+  [ReservationStatus.COMPLETED]: { label: "Concluída", icon: CheckCircle2, className: "bg-primary/10 text-primary border-primary/20" },
 };
 
-const formatDate = (s: string) =>
-  new Date(s + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
-const ReservationCard = ({ r }: { r: Reservation }) => {
-  const cfg = statusConfig[r.payment_status];
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+interface ReservationCardProps {
+  reservation: Reservation;
+  unit?: Unit;
+  categoryName: string;
+  onCancel: (id: string) => void;
+  cancelling: boolean;
+}
+
+const ReservationCard = ({ reservation, unit, categoryName, onCancel, cancelling }: ReservationCardProps) => {
+  const cfg = statusConfig[reservation.status];
   const Icon = cfg.icon;
-  const progress = (r.amount_paid / r.total_price) * 100;
+  const start = new Date(reservation.startTime);
+  const end = new Date(reservation.endTime);
+  const durationHours = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60));
+  const canCancel = reservation.status === ReservationStatus.PENDING || reservation.status === ReservationStatus.CONFIRMED;
 
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl">
@@ -49,11 +48,11 @@ const ReservationCard = ({ r }: { r: Reservation }) => {
       <CardContent className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <Badge variant="secondary" className="mb-2 text-xs font-medium">{r.sport_type}</Badge>
-            <h3 className="font-bold text-lg leading-tight truncate">{r.court_name}</h3>
+            <Badge variant="secondary" className="mb-2 text-xs font-medium">{categoryName}</Badge>
+            <h3 className="font-bold text-lg leading-tight truncate">{unit?.name ?? "Quadra"}</h3>
             <div className="flex items-center gap-1.5 text-muted-foreground text-sm mt-1">
               <MapPin className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{r.location}</span>
+              <span className="truncate">{unit?.address ?? "-"}</span>
             </div>
           </div>
           <Badge variant="outline" className={`${cfg.className} gap-1 shrink-0 font-medium`}>
@@ -66,35 +65,39 @@ const ReservationCard = ({ r }: { r: Reservation }) => {
           <div className="flex flex-col items-center text-center">
             <Calendar className="w-4 h-4 text-primary mb-1" />
             <span className="text-xs text-muted-foreground">Data</span>
-            <span className="text-sm font-semibold">{formatDate(r.reservation_date)}</span>
+            <span className="text-sm font-semibold">{formatDate(reservation.startTime)}</span>
           </div>
           <div className="flex flex-col items-center text-center border-x border-border/60">
             <Clock className="w-4 h-4 text-primary mb-1" />
             <span className="text-xs text-muted-foreground">Horário</span>
-            <span className="text-sm font-semibold">{r.start_time}</span>
+            <span className="text-sm font-semibold">{formatTime(reservation.startTime)}</span>
           </div>
           <div className="flex flex-col items-center text-center">
             <Users className="w-4 h-4 text-primary mb-1" />
-            <span className="text-xs text-muted-foreground">Jogadores</span>
-            <span className="text-sm font-semibold">{r.num_players}</span>
+            <span className="text-xs text-muted-foreground">Duração</span>
+            <span className="text-sm font-semibold">{durationHours}h</span>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex justify-between items-baseline">
-            <span className="text-xs text-muted-foreground">Pagamento</span>
-            <span className="text-sm">
-              <span className="font-bold text-foreground">R$ {r.amount_paid.toFixed(2)}</span>
-              <span className="text-muted-foreground"> / R$ {r.total_price.toFixed(2)}</span>
-            </span>
-          </div>
-          <Progress value={progress} className="h-2" />
+        <div className="flex justify-between items-baseline">
+          <span className="text-xs text-muted-foreground">Valor total</span>
+          <span className="text-lg font-bold text-foreground">R$ {Number(reservation.totalPrice).toFixed(2)}</span>
         </div>
 
-        {r.payment_status !== "paid" && (
-          <Button className="w-full gradient-blue text-primary-foreground hover:opacity-90 border-0">
-            Concluir pagamento
-            <ArrowRight className="w-4 h-4" />
+        {reservation.bailPaid && (
+          <Badge variant="outline" className="bg-success/10 text-success border-success/20 w-fit">
+            Caução pago
+          </Badge>
+        )}
+
+        {canCancel && (
+          <Button
+            variant="outline"
+            disabled={cancelling}
+            onClick={() => onCancel(reservation.id)}
+            className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+          >
+            {cancelling ? "Cancelando..." : "Cancelar reserva"}
           </Button>
         )}
       </CardContent>
@@ -103,17 +106,62 @@ const ReservationCard = ({ r }: { r: Reservation }) => {
 };
 
 const Reservations = () => {
-  const [reservations] = useState<Reservation[]>(mockReservations);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [units, setUnits] = useState<Record<string, Unit>>({});
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const today = new Date().toISOString().split("T")[0];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [data, categoriesData] = await Promise.all([
+          reservationsApi.listMine(),
+          categoriesApi.list(),
+        ]);
+        setReservations(data);
+        setCategories(categoriesData);
+
+        const unitIds = [...new Set(data.map((r) => r.unitId))];
+        const unitsData = await Promise.all(unitIds.map((id) => unitsApi.get(id)));
+        setUnits(Object.fromEntries(unitsData.map((u) => [u.id, u])));
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Erro ao carregar reservas";
+        toast({ variant: "destructive", title: "Erro", description: message });
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const categoryName = (categoryId?: string) =>
+    categories.find((c) => c.id === categoryId)?.name ?? "Outro";
+
   const { upcoming, past } = useMemo(() => {
-    const upcoming = reservations.filter((r) => r.reservation_date >= today);
-    const past = reservations.filter((r) => r.reservation_date < today);
+    const now = new Date();
+    const upcoming = reservations.filter((r) => new Date(r.startTime) >= now);
+    const past = reservations.filter((r) => new Date(r.startTime) < now);
     return { upcoming, past };
-  }, [reservations, today]);
+  }, [reservations]);
 
-  const totalSpent = reservations.reduce((acc, r) => acc + r.amount_paid, 0);
+  const handleCancel = async (id: string) => {
+    setCancellingId(id);
+    try {
+      await reservationsApi.cancel(id);
+      setReservations((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: ReservationStatus.CANCELLED } : r))
+      );
+      toast({ title: "Reserva cancelada" });
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Erro ao cancelar reserva";
+      toast({ variant: "destructive", title: "Erro", description: message });
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const EmptyState = ({ label }: { label: string }) => (
     <Card className="border-2 border-dashed rounded-2xl">
@@ -133,9 +181,16 @@ const Reservations = () => {
     </Card>
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <header className="gradient-blue text-primary-foreground rounded-b-3xl shadow-lg">
         <div className="container mx-auto max-w-2xl px-5 pt-10 pb-8">
           <h1 className="text-3xl font-bold">Minhas Reservas</h1>
@@ -150,7 +205,6 @@ const Reservations = () => {
               <p className="text-2xl font-bold">{past.length}</p>
               <p className="text-xs text-primary-foreground/80">Concluídas</p>
             </div>
-            
           </div>
         </div>
       </header>
@@ -170,7 +224,16 @@ const Reservations = () => {
             {upcoming.length === 0 ? (
               <EmptyState label="Nenhuma reserva próxima" />
             ) : (
-              upcoming.map((r) => <ReservationCard key={r.id} r={r} />)
+              upcoming.map((r) => (
+                <ReservationCard
+                  key={r.id}
+                  reservation={r}
+                  unit={units[r.unitId]}
+                  categoryName={categoryName(units[r.unitId]?.categoryId)}
+                  onCancel={handleCancel}
+                  cancelling={cancellingId === r.id}
+                />
+              ))
             )}
           </TabsContent>
 
@@ -178,7 +241,16 @@ const Reservations = () => {
             {past.length === 0 ? (
               <EmptyState label="Nenhuma reserva no histórico" />
             ) : (
-              past.map((r) => <ReservationCard key={r.id} r={r} />)
+              past.map((r) => (
+                <ReservationCard
+                  key={r.id}
+                  reservation={r}
+                  unit={units[r.unitId]}
+                  categoryName={categoryName(units[r.unitId]?.categoryId)}
+                  onCancel={handleCancel}
+                  cancelling={cancellingId === r.id}
+                />
+              ))
             )}
           </TabsContent>
         </Tabs>
