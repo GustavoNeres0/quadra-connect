@@ -3,21 +3,33 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { authApi, ApiError } from "@/lib/api";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast({ variant: "destructive", title: "Erro", description: "Por favor, preencha todos os campos." });
       return;
     }
-    toast({ title: "Login realizado!", description: "Redirecionando..." });
-    navigate("/home");
+
+    setLoading(true);
+    try {
+      await authApi.login(email, password);
+      toast({ title: "Login realizado!", description: "Redirecionando..." });
+      navigate("/home");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Erro ao fazer login";
+      toast({ variant: "destructive", title: "Erro", description: message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -35,8 +47,8 @@ const Login = () => {
               Esqueceu sua senha?
             </button>
             <div className="space-y-3 pt-2">
-              <Button type="submit" variant="outline" className="w-full h-12 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground">
-                Login
+              <Button type="submit" disabled={loading} variant="outline" className="w-full h-12 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground">
+                {loading ? "Entrando..." : "Login"}
               </Button>
               <Button type="button" onClick={handleGoogleLogin} variant="outline" className="w-full h-12 border-2 border-accent text-accent hover:bg-accent hover:text-accent-foreground">
                 Entrar com Google
