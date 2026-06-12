@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { formatCPF, formatPhone } from "@/lib/validations";
+import { authApi, ApiError, ProfileType } from "@/lib/api";
 
 const Register = () => {
   const [formData, setFormData] = useState({
     name: "", email: "", cpf: "", phone: "", address: "", city: "", state: "", password: "", confirmPassword: "",
   });
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -21,7 +23,7 @@ const Register = () => {
     setFormData({ ...formData, [name]: formattedValue });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
       toast({ variant: "destructive", title: "Erro", description: "As senhas não coincidem." });
@@ -31,8 +33,27 @@ const Register = () => {
       toast({ variant: "destructive", title: "Erro", description: "A senha deve ter pelo menos 6 caracteres." });
       return;
     }
-    toast({ title: "Cadastro realizado!", description: "Você já pode fazer login." });
-    navigate("/login");
+
+    setLoading(true);
+    try {
+      await authApi.register({
+        email: formData.email,
+        password: formData.password,
+        profileType: ProfileType.CUSTOMER,
+        customer: {
+          name: formData.name,
+          cpf: formData.cpf.replace(/[^\d]/g, ""),
+          phone: formData.phone.replace(/[^\d]/g, ""),
+        },
+      });
+      toast({ title: "Cadastro realizado!", description: "Você já pode fazer login." });
+      navigate("/login");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Erro ao cadastrar";
+      toast({ variant: "destructive", title: "Erro", description: message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -83,7 +104,9 @@ const Register = () => {
               <Input id="confirmPassword" name="confirmPassword" type="password" placeholder="Digite a senha novamente" value={formData.confirmPassword} onChange={handleChange} className="h-12" maxLength={100} />
             </div>
             <div className="space-y-3 pt-4">
-              <Button type="submit" className="w-full h-12 bg-primary hover:bg-primary/90">Criar Conta</Button>
+              <Button type="submit" disabled={loading} className="w-full h-12 bg-primary hover:bg-primary/90">
+                {loading ? "Criando conta..." : "Criar Conta"}
+              </Button>
               <Button type="button" variant="outline" className="w-full h-12 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground" onClick={() => navigate("/login")}>
                 Já tenho conta
               </Button>
