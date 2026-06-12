@@ -1,16 +1,13 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Calendar, MapPin, TrendingUp, Star, ChevronRight } from "lucide-react";
+import { Search, Calendar, MapPin, TrendingUp, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { BottomNav } from "@/components/BottomNav";
-
-const popularCourts = [
-  { id: "1", name: "Arena Sport Center", sport: "Futebol", price: 120, city: "Anápolis", rating: 4.8 },
-  { id: "2", name: "Quadra Central Tênis", sport: "Tênis", price: 80, city: "Anápolis", rating: 4.5 },
-  { id: "4", name: "Basquete Arena", sport: "Basquete", price: 90, city: "Anápolis", rating: 4.7 },
-];
+import { useToast } from "@/hooks/use-toast";
+import { unitsApi, categoriesApi, ApiError, type Unit, type Category } from "@/lib/api";
 
 const quickCategories = [
   { label: "Futebol", emoji: "⚽" },
@@ -19,8 +16,49 @@ const quickCategories = [
   { label: "Vôlei", emoji: "🏐" },
 ];
 
+const normalizeText = (text: string) =>
+  text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase();
+
+const sportEmoji = (categoryName: string) => {
+  const name = normalizeText(categoryName);
+  if (name.includes("futebol")) return "⚽";
+  if (name.includes("tenis")) return "🎾";
+  if (name.includes("volei")) return "🏐";
+  if (name.includes("basquete")) return "🏀";
+  return "🏟️";
+};
+
 const Home = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [unitsData, categoriesData] = await Promise.all([
+          unitsApi.list(),
+          categoriesApi.list(),
+        ]);
+        setUnits(unitsData);
+        setCategories(categoriesData);
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Erro ao carregar quadras";
+        toast({ variant: "destructive", title: "Erro", description: message });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  const categoryName = (categoryId: string) =>
+    categories.find((c) => c.id === categoryId)?.name ?? "Outro";
+
+  const popularUnits = units.slice(0, 3);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -30,6 +68,7 @@ const Home = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-white/70 text-sm">Bem-vindo de volta 👋</p>
+              {/* TODO: trocar "Usuário" pelo nome real via profileApi.customer() */}
               <h1 className="text-2xl font-bold">Usuário</h1>
             </div>
             <Avatar
@@ -71,6 +110,7 @@ const Home = () => {
         </Card>
 
         {/* Stats */}
+        {/* TODO: substituir valores fixos por dados reais de reservationsApi.listMine() (Passo 9) */}
         <div className="grid grid-cols-2 gap-4">
           <Card className="border-0 shadow-sm bg-primary/5">
             <CardContent className="p-4 flex items-center gap-3">
@@ -97,6 +137,7 @@ const Home = () => {
         </div>
 
         {/* Próxima Reserva */}
+        {/* TODO: substituir pelo dado real (próxima reserva futura) na integração de Reservations.tsx (Passo 9) */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-foreground">Próxima Reserva</h2>
@@ -134,35 +175,40 @@ const Home = () => {
               Ver mais <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <div className="space-y-3">
-            {popularCourts.map((court) => (
-              <Card
-                key={court.id}
-                className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/booking?courtId=${court.id}`)}
-              >
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0">
-                    <span className="text-2xl">
-                      {court.sport === "Futebol" ? "⚽" : court.sport === "Tênis" ? "🎾" : "🏀"}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate">{court.name}</h3>
-                    <p className="text-sm text-muted-foreground">{court.city}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs font-medium text-foreground">{court.rating}</span>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              Carregando quadras...
+            </div>
+          ) : popularUnits.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma quadra cadastrada ainda.</p>
+          ) : (
+            <div className="space-y-3">
+              {popularUnits.map((unit) => (
+                <Card
+                  key={unit.id}
+                  className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigate(`/booking?courtId=${unit.id}`)}
+                >
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0">
+                      <span className="text-2xl">{sportEmoji(categoryName(unit.categoryId))}</span>
                     </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-primary">R$ {court.price}</p>
-                    <p className="text-xs text-muted-foreground">/hora</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">{unit.name}</h3>
+                      <p className="text-sm text-muted-foreground">{unit.city}</p>
+                      <Badge variant="secondary" className="text-xs mt-1">{categoryName(unit.categoryId)}</Badge>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-bold text-primary">R$ {Number(unit.pricePerHour).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">/hora</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
