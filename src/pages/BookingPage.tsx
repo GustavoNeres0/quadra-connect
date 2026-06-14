@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -13,23 +13,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { BottomNav } from "@/components/BottomNav";
-import { ArrowLeft, Clock, Users, DollarSign } from "lucide-react";
-
-interface Court {
-  id: string;
-  name: string;
-  sport_type: string;
-  price_per_hour: number;
-  location: string;
-}
-
-const mockCourtsMap: Record<string, Court> = {
-  "1": { id: "1", name: "Arena Sport Center", sport_type: "Futebol", price_per_hour: 120, location: "Rua das Flores, 123" },
-  "2": { id: "2", name: "Quadra Central Tênis", sport_type: "Tênis", price_per_hour: 80, location: "Av. Brasil, 456" },
-  "3": { id: "3", name: "Vôlei Praia Club", sport_type: "Vôlei de Praia", price_per_hour: 60, location: "Rua do Esporte, 789" },
-  "4": { id: "4", name: "Basquete Arena", sport_type: "Basquete", price_per_hour: 90, location: "Rua Central, 321" },
-  "5": { id: "5", name: "Vôlei Indoor", sport_type: "Vôlei", price_per_hour: 70, location: "Av. Goiás, 555" },
-};
+import { ArrowLeft, Clock, Users, DollarSign, Loader2 } from "lucide-react";
+import { unitsApi, categoriesApi, reservationsApi, ApiError, type Unit, type Category } from "@/lib/api";
 
 const BookingPage = () => {
   const [searchParams] = useSearchParams();
@@ -37,28 +22,90 @@ const BookingPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const court = useMemo(() => courtId ? mockCourtsMap[courtId] || null : null, [courtId]);
+  const [unit, setUnit] = useState<Unit | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingUnit, setLoadingUnit] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = useState("");
   const [duration, setDuration] = useState("1");
   const [numPlayers, setNumPlayers] = useState("2");
 
+  useEffect(() => {
+    if (!courtId) {
+      setLoadingUnit(false);
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const [unitData, categoriesData] = await Promise.all([
+          unitsApi.get(courtId),
+          categoriesApi.list(),
+        ]);
+        setUnit(unitData);
+        setCategories(categoriesData);
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Quadra não encontrada";
+        toast({ variant: "destructive", title: "Erro", description: message });
+      } finally {
+        setLoadingUnit(false);
+      }
+    };
+    loadData();
+  }, [courtId]);
+
+  const categoryName = useMemo(
+    () => categories.find((c) => c.id === unit?.categoryId)?.name ?? "Outro",
+    [categories, unit]
+  );
+
   const calculateTotalPrice = () => {
-    if (!court) return 0;
-    return court.price_per_hour * parseInt(duration);
+    if (!unit) return 0;
+    return Number(unit.pricePerHour) * parseInt(duration);
   };
 
-  const handleReservation = () => {
-    if (!date || !startTime || !court) {
+  const handleReservation = async () => {
+    if (!date || !startTime || !unit) {
       toast({ variant: "destructive", title: "Campos obrigatórios", description: "Por favor, preencha todos os campos." });
       return;
     }
-    toast({ title: "Reserva confirmada!", description: "Sua reserva foi realizada com sucesso." });
-    navigate("/reservations");
+
+    const [hours, minutes] = startTime.split(":").map(Number);
+    const start = new Date(date);
+    start.setHours(hours, minutes, 0, 0);
+
+    const end = new Date(start);
+    end.setHours(end.getHours() + parseInt(duration));
+
+    setSubmitting(true);
+    try {
+      await reservationsApi.create({
+        unitId: unit.id,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        totalPrice: calculateTotalPrice(),
+      });
+      toast({ title: "Reserva confirmada!", description: "Sua reserva foi realizada com sucesso." });
+      navigate("/reservations");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Erro ao confirmar reserva";
+      toast({ variant: "destructive", title: "Erro", description: message });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (!court) {
+  if (loadingUnit) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!unit) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -78,14 +125,15 @@ const BookingPage = () => {
 
         <div className="space-y-6">
           <div className="bg-card border rounded-2xl p-6 space-y-4">
-            <h1 className="text-2xl font-bold">{court.name}</h1>
+            <h1 className="text-2xl font-bold">{unit.name}</h1>
             <div className="flex items-center gap-2 text-muted-foreground">
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">{court.sport_type}</span>
+              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">{categoryName}</span>
             </div>
-            <p className="text-muted-foreground">{court.location}</p>
+            <p className="text-muted-foreground">{unit.address}</p>
+            {unit.description && <p className="text-muted-foreground text-sm">{unit.description}</p>}
             <div className="flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-primary">R$ {court.price_per_hour.toFixed(2)}</span>
+              <span className="text-2xl font-bold text-primary">R$ {Number(unit.pricePerHour).toFixed(2)}</span>
               <span className="text-muted-foreground">/ hora</span>
             </div>
           </div>
@@ -121,8 +169,8 @@ const BookingPage = () => {
                 <span className="text-lg font-medium">Total</span>
                 <span className="text-2xl font-bold text-primary">R$ {calculateTotalPrice().toFixed(2)}</span>
               </div>
-              <Button onClick={handleReservation} className="w-full h-12 bg-accent hover:bg-accent/90">
-                Confirmar Reserva
+              <Button onClick={handleReservation} disabled={submitting} className="w-full h-12 bg-accent hover:bg-accent/90">
+                {submitting ? "Confirmando..." : "Confirmar Reserva"}
               </Button>
             </div>
           </div>
