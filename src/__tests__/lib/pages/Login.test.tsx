@@ -2,6 +2,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Login from '@/pages/Login';
+import { authApi } from '@/lib/api';
+
+// O cliente HTTP usa import.meta (Vite), que o Jest não suporta: mock da camada de API.
+jest.mock('@/lib/api', () => ({
+  authApi: { login: jest.fn() },
+  ApiError: class ApiError extends Error {},
+}));
+
+const mockLogin = authApi.login as jest.Mock;
 
 const renderLogin = () =>
   render(
@@ -33,6 +42,19 @@ it('exibe erro ao submeter com campos vazios', async () => {
     const emailInput = screen.getByPlaceholderText(/email/i);
     await userEvent.type(emailInput, 'teste@email.com');
     expect(emailInput).toHaveValue('teste@email.com');
+  });
+
+  it('chama a API de login com email e senha corretos', async () => {
+    mockLogin.mockResolvedValueOnce({ accessToken: 'token' });
+    renderLogin();
+
+    await userEvent.type(screen.getByPlaceholderText(/email/i), 'user@test.com');
+    await userEvent.type(screen.getByPlaceholderText(/senha/i), 'senha123');
+    await userEvent.click(screen.getByRole('button', { name: /^login$/i }));
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledWith('user@test.com', 'senha123');
+    });
   });
 
 });
