@@ -1,35 +1,44 @@
-# Sistema de Reserva de Quadras
+# Quadra Connect – Aplicação do Cliente
 
-Projeto desenvolvido para permitir que usuários façam reservas de quadras esportivas.
+Aplicação web responsiva (React + TypeScript + Vite + Tailwind CSS + shadcn/ui), pensada para uso em celular, para jogadores buscarem quadras, verem horários disponíveis e fazerem reservas. Consome a API [quadra_connect_api](https://github.com/higorxi/quadra_connect_api).
 
-## Sobre o projeto
+## Funcionalidades
 
-A aplicação permite:
+- Cadastro e login
+- Busca de quadras e visualização de horários
+- Realização e acompanhamento de reservas
+- Perfil do cliente
 
-- cadastro e login de usuários
-- busca de quadras disponíveis
-- realização de reservas
-- visualização das reservas feitas
+## Pré-requisitos
 
-O projeto foi construído utilizando React + TypeScript no frontend e Supabase no backend.
+- Node.js 20+ e npm
+- A API do Quadra Connect rodando (padrão `http://localhost:3000`)
 
-## Como executar
+## Configuração
 
-Pré-requisitos:
+Crie um arquivo `.env` na raiz:
 
-- Node.js instalado
-- npm ou yarn
+```
+VITE_API_BASE_URL=http://localhost:3000
+```
 
-Passos:
+Se `VITE_API_BASE_URL` não for definida, a aplicação usa `http://localhost:3000`. Todos os dados vêm da API; a aplicação não acessa o Supabase diretamente.
 
-git clone <url-do-repositorio>
-cd <nome-do-projeto>
+## Executar
+
+```bash
 npm install
-npm run dev
+npm run dev           # desenvolvimento
+npm run build         # build de produção
+npm run lint
+npm test              # testes (Jest)
+npm run test:coverage
+```
 
-## Observações
+## Executar o sistema completo
 
-- Algumas validações ainda podem ser melhoradas
-- Interface focada inicialmente em dispositivos móveis
+1. Suba a API (`quadra_connect_api`) e confirme que ela responde.
+2. Suba o painel do locador (`quadra_connect_admin`).
+3. Suba esta aplicação com `npm run dev`.
 
-Projeto acadêmico para fins de estudo.
+A API só aceita CORS das origens listadas em seu `src/main.ts`; se o Vite subir em outra porta, ajuste essa lista na API.
