@@ -20,11 +20,9 @@ Crie um arquivo `.env` na raiz:
 
 ```
 VITE_API_BASE_URL=http://localhost:3000
-VITE_SUPABASE_URL=<url do projeto Supabase>
-VITE_SUPABASE_PUBLISHABLE_KEY=<chave publicável do Supabase>
 ```
 
-Se `VITE_API_BASE_URL` não for definida, a aplicação usa `http://localhost:3000`. As variáveis do Supabase ainda são usadas por parte do fluxo do cliente e estão sendo migradas para a API.
+Se `VITE_API_BASE_URL` não for definida, a aplicação usa `http://localhost:3000`. Todos os dados vêm da API; a aplicação não acessa o Supabase diretamente.
 
 ## Executar
 
