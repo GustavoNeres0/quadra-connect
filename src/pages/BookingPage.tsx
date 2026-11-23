@@ -14,7 +14,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { BottomNav } from "@/components/BottomNav";
 import { ArrowLeft, Clock, Users, DollarSign, Loader2 } from "lucide-react";
-import { unitsApi, categoriesApi, reservationsApi, ApiError, type Unit, type Category } from "@/lib/api";
+import { unitsApi, categoriesApi, reservationsApi, ApiError, type Unit, type Category, type BusySlot } from "@/lib/api";
+import { dayBounds, formatBusySlot, hasConflict } from "@/lib/availability";
 
 const BookingPage = () => {
   const [searchParams] = useSearchParams();
@@ -31,6 +32,8 @@ const BookingPage = () => {
   const [startTime, setStartTime] = useState("");
   const [duration, setDuration] = useState("1");
   const [numPlayers, setNumPlayers] = useState("2");
+  const [busy, setBusy] = useState<BusySlot[]>([]);
+  const [loadingBusy, setLoadingBusy] = useState(false);
 
   useEffect(() => {
     if (!courtId) {
@@ -55,6 +58,45 @@ const BookingPage = () => {
     };
     loadData();
   }, [courtId]);
+
+  // Horários já ocupados no dia escolhido (RF-004/RF-005)
+  useEffect(() => {
+    if (!courtId || !date) {
+      setBusy([]);
+      return;
+    }
+    let cancelled = false;
+    const { from, to } = dayBounds(date);
+    setLoadingBusy(true);
+    unitsApi
+      .availability(courtId, from, to)
+      .then((data) => {
+        if (!cancelled) setBusy(data.busy);
+      })
+      .catch(() => {
+        if (!cancelled) setBusy([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courtId, date]);
+
+  const selectedRange = useMemo(() => {
+    if (!date || !startTime) return null;
+    const [hours, minutes] = startTime.split(":").map(Number);
+    const start = new Date(date);
+    start.setHours(hours, minutes, 0, 0);
+    const end = new Date(start);
+    end.setHours(end.getHours() + parseInt(duration));
+    return { start, end };
+  }, [date, startTime, duration]);
+
+  const conflict = selectedRange
+    ? hasConflict(busy, selectedRange.start, selectedRange.end)
+    : false;
 
   const categoryName = useMemo(
     () => categories.find((c) => c.id === unit?.categoryId)?.name ?? "Outro",
@@ -147,6 +189,22 @@ const BookingPage = () => {
             <div className="space-y-2">
               <Label htmlFor="startTime"><Clock className="w-4 h-4 inline mr-2" />Horário de Início</Label>
               <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-12" />
+              <div className="text-sm" data-testid="busy-slots">
+                {loadingBusy ? (
+                  <span className="text-muted-foreground">Verificando horários...</span>
+                ) : busy.length === 0 ? (
+                  <span className="text-muted-foreground">Nenhum horário ocupado neste dia.</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Horários ocupados: {busy.map(formatBusySlot).join(", ")}
+                  </span>
+                )}
+              </div>
+              {conflict && (
+                <p className="text-sm text-destructive" role="alert">
+                  Esse horário já está ocupado. Escolha outro horário ou duração.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="duration">Duração (horas)</Label>
@@ -169,7 +227,7 @@ const BookingPage = () => {
                 <span className="text-lg font-medium">Total</span>
                 <span className="text-2xl font-bold text-primary">R$ {calculateTotalPrice().toFixed(2)}</span>
               </div>
-              <Button onClick={handleReservation} disabled={submitting} className="w-full h-12 bg-accent hover:bg-accent/90">
+              <Button onClick={handleReservation} disabled={submitting || conflict} className="w-full h-12 bg-accent hover:bg-accent/90">
                 {submitting ? "Confirmando..." : "Confirmar Reserva"}
               </Button>
             </div>

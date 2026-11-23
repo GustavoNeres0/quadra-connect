@@ -47,6 +47,19 @@ export interface Unit {
   updatedAt: string;
 }
 
+export interface BusySlot {
+  startTime: string; // ISO
+  endTime: string; // ISO
+  status: string;
+}
+
+export interface UnitAvailability {
+  unitId: string;
+  from: string;
+  to: string;
+  busy: BusySlot[];
+}
+
 export interface Reservation {
   id: string;
   customerId: string;
